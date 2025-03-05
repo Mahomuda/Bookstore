@@ -1,8 +1,9 @@
-{% extends "base.html" %}
+{% extends "login_user/log_base.html" %}
 {% block body_class %}blur-page{% endblock %}
+
 {% block content %}
     <div class="contact-container" >
-        <h1>Contact Us</h1>
+        <h1>Help</h1>
         <form action="/submit-form" method="post" class="contact-form">
             <label for="name">Your Name:</label>
             <input type="text" id="name" name="name" placeholder="Enter your name" required>
