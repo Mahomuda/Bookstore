@@ -1,4 +1,4 @@
-from django.contrib.auth import authenticate, logout
+from django.contrib.auth import authenticate, logout, login
 from django.http import HttpResponseRedirect
 from django.shortcuts import render, redirect, reverse, get_object_or_404
 from django.contrib.auth.decorators import login_required
@@ -37,12 +37,7 @@ def contacts(request):
 def subscription(request):
     if request.method == 'POST':
         return redirect(reverse('sub_base'))
-    return render(request, 'login_signup_subscription/subscription.html')
-
-
-####################################################################
-
-
+    return render(request, 'login_user/subscription.html')
 def signup(request):
     if request.method == 'POST':
         form = SignupForm(request.POST)
@@ -51,7 +46,7 @@ def signup(request):
             return redirect('login')
     else:
         form = SignupForm()
-    return render(request, 'login_signup_subscription/signup.html', {'form': form})
+    return render(request, 'bmHome/signup.html', {'form': form})
 
 def login(request):
     if request.method == 'POST':
@@ -61,19 +56,23 @@ def login(request):
             password = form.cleaned_data['password']
             user = authenticate(request, username=username, password=password)
             if user is not None:
-                authenticate(request, user)
-
+                login(request, user)
                 if user.user_type == 'normal':
-                    return redirect('log_profile')
+                    return redirect('login_user/log_profile')
                 elif user.user_type == 'shopowner':
                     return redirect('shop_profile')
+                elif user.user_type == 'rider':
+                    return redirect('rider_profile')
             else:
                 messages.error(request, "Invalid username or password")
     else:
         form = LoginForm()
-    return render(request, 'login_signup_subscription/login.html', {'form': form})
+
+    return render(request, 'bmHome/login.html', {'form': form})
 
 
+
+####################################################################
 def subscription(request):
     if request.method == 'POST':
         form = Sub_LoginForm(request.POST)
@@ -93,14 +92,14 @@ def subscription(request):
                 form.add_error(None, 'Invalid login credentials')
     else:
         form = Sub_LoginForm()
-    return render(request, 'login_signup_subscription/subscription.html', {'form': form})
+    return render(request, 'login_user/subscription.html', {'form': form})
 
 
 def forget_pass(request):
-    return render(request, template_name='login_signup_subscription/forget_pass.html')
+    return render(request, template_name='login_user/forget_pass.html')
 
 def payment(request):
-    return render(request, template_name='login_signup_subscription/payment.html')
+    return render(request, template_name='login_user/payment.html')
 def process_payment(request):
     if request.method == 'POST':
         phone = request.POST.get('phone')
@@ -193,9 +192,10 @@ def payment_confirmation(request, book_id):
     return render(request, 'login_user/payment_confirmation.html', {'book': book})
 def log_help(request):
     return render(request, template_name='login_user/log_help.html')
+
 @login_required
 def log_profile(request):
-    return render(request, 'login_user/log_profile.html', {'user': request.user})
+    return render(request, template_name='login_user/log_profile.html',context= {'user': request.user})
 @login_required
 def update_profile(request):
     if request.method == 'POST':
@@ -206,10 +206,174 @@ def update_profile(request):
     else:
         form = ProfileUpdateForm(instance=request.user)
     return render(request, 'login_user/profile_form.html', {'form': form})
+def logout_view(request):
+    logout(request)
+    return redirect('login')
+def sub_help(request):
+    return render(request, template_name='subscribed_user/sub_help.html')
+
+@login_required
+def sub_profile(request):
+    return render(request, template_name='subscribed_user/sub_profile.html',context={'user': request.user})
+
+def update_sub_profile(request):
+    if request.method == 'POST':
+        form = ProfileUpdateForm(request.POST, instance=request.user)
+        if form.is_valid():
+            form.save()
+            return redirect('log_profile')
+    else:
+        form = ProfileUpdateForm(instance=request.user)
+    return render(request, 'subscribed_user/sub_profile_form.html', {'form': form})
+
+def sub_navbar(request):
+    return render(request, template_name='subscribed_user/sub_navbar.html')
+def sub_base(request):
+    return render(request, template_name='subscribed_user/sub_base.html')
+def sub_books(request):
+    allbooks = Book.objects.all()
+    item = {
+        'allbooks': allbooks,
+    }
+    return render(request, template_name='subscribed_user/sub_books.html',context=item)
+
+
+def sub_rent_books(request):
+    allbooks = Book.objects.filter(rentable= 'yes')
+    item = {
+        'allbooks': allbooks,
+    }
+    return render(request, 'subscribed_user/sub_rent_books.html', context= item)
+
+def sub_books_details(request,book_id):
+    allbooks = Book.objects.get(pk=book_id)
+    item = {
+        'allbooks': allbooks,
+    }
+    return render(request, template_name='subscribed_user/sub_books_details.html',context= item)
+def sub_rent_books_details(request,book_id):
+    allbooks = Book.objects.get(pk=book_id)
+    item = {
+        'allbooks': allbooks,
+    }
+    return render(request, template_name='subscribed_user/sub_rent_books_details.html',context= item)
+
+
+def rent_info(request, book_id):
+    book = Book.objects.get(id=book_id)
+    if request.method == "POST":
+        email = request.POST.get('email')
+        address = request.POST.get('address')
+        duration = request.POST.get('duration')
+    return render(request, 'subscribed_user/rent_info.html', {'book': book})
+
+
+def rent_confirmation(request, book_id):
+    book = Book.objects.get(id=book_id)
+    return render(request, 'subscribed_user/rent_confirmation.html', {'book': book})
+def shop_base(request):
+    return render(request, template_name='shop_owner/shop_base.html')
+
+def shop_navbar(request):
+    return render(request, template_name='shop_owner/shop_navbar.html')
+
+def shop_books(request):
+    genre_filter = request.GET.get('genre', None)
+    if genre_filter:
+        all_books = Book.objects.filter(genre__iexact=genre_filter)
+    else:
+        all_books = Book.objects.all()
+
+    item = {
+        'all_books': all_books,
+        'genre': genre_filter,
+    }
+    return render(request, template_name='shop_owner/shop_books.html', context=item)
+
+def shop_help(request):
+    return render(request, template_name='shop_owner/shop_help.html')
+
+@login_required
+def shop_profile(request):
+    return render(request, 'shop_owner/shop_profile.html', {'user': request.user})
+
+def shop_update_profile(request):
+    if request.method == 'POST':
+        form = ProfileUpdateForm(request.POST, instance=request.user)
+        if form.is_valid():
+            form.save()
+            return redirect('log_profile')
+    else:
+        form = ProfileUpdateForm(instance=request.user)
+    return render(request, 'shop_owner/shop_profile_form.html', {'form': form})
+
+def shop_payment(request):
+    return render(request, template_name='shop_owner/shop_payment.html')
+
+def shop_book_details(request,book_id):
+    allbooks = Book.objects.get(pk = book_id)
+    item = {
+        'allbooks':allbooks,
+    }
+    return render(request,template_name = 'shop_owner/shop_book_details.html',context = item)
+
+def upload_books(request):
+    form = BooksForm()
+    if request.method == 'POST':
+        form = BooksForm(request.POST, request.FILES)
+        if form.is_valid():
+            form.save()
+    context = {'form': form}
+    return render(request, template_name='shop_owner/books_form.html', context=context)
+
+def update_books(request, book_id):
+    allbooks = Book.objects.get(pk=book_id)
+    form = BooksForm (instance=allbooks)
+    if request.method == 'POST':
+        form = BooksForm(request.POST, request.FILES, instance=books)
+        if form.is_valid():
+            form.save()
+            return redirect('shop_books')
+    context = {'form': form}
+    return render(request, template_name='shop_owner/books_form.html',context=context)
+
+def delete_books(request,book_id):
+   allbooks = Book.objects.get(pk=book_id)
+   if request.method == 'POST':
+       allbooks.delete()
+       return redirect('home')
+   return render(request, template_name = 'shop_owner\delete_books.html')
+   return redirect('payment')
+def view_sub_profile(request, user_id):
+    sub_profile = get_object_or_404(SubProfile, user_id=user_id)
+    return render(request, 'sub_profile.html', {'sub_profile': sub_profile})
+
+
+#####################################################################################################
+def rider_base(request):
+    return render(request, template_name='Rider/rider_base.html')
+
+def rider_navbar(request):
+    return render(request, template_name='Rider/rider_navbar.html')
+@login_required
+def rider_profile(request):
+    return render(request, 'Rider/rider_profile.html', {'user': request.user})
+@login_required
+def rider_update_profile(request):
+    if request.method == 'POST':
+        form = ProfileUpdateForm(request.POST, instance=request.user)
+        if form.is_valid():
+            form.save()
+            return redirect('rider_profile')
+    else:
+        form = ProfileUpdateForm(instance=request.user)
+    return render(request, 'Rider/profile_form.html', {'form': form})
 
 
 def logout_view(request):
     logout(request)
     return redirect('login')
+
+
 
 
