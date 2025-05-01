@@ -10,7 +10,7 @@
         <h1>{{ book.book_name }}</h1>
         <p><strong>Genre:</strong> {{ book.genre }}</p>
 
-         <form class="payment-form" method="POST" action="{% url 'rent_confirmation' book_id=book.id %}">
+         <form class="payment-form" method="POST" action="{% url 'rent_confirmation' book_id=allbooks.book_id %}">
             {% csrf_token %}
             <div class="form-group">
                 <label for="email">Email:</label>
@@ -45,7 +45,7 @@
             </div>
 <br>
             <div class="button-container">
-                <button type="submit" class="submit-btn">Proceed</button>
+                <button type="submit" class="submit-btn" >Proceed</button>
             </div>
         </form>
     </div>

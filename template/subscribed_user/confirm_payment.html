@@ -1,5 +1,5 @@
-{% extends "login_user/log_base.html" %}
 
+{% extends "subscribed_user/sub_base.html" %}
 {% block body_class %}blur-page{% endblock %}
 
 {% block content %}
@@ -10,7 +10,7 @@
     <p class="payment-description">Please confirm your payment details below:</p>
 
     <div class="card p-4">
-        <form class="payment-form" action="{% url 'process_payment_for_book' allbooks.book_id  %}" method="POST">
+        <form class="payment-form" action="{% url 'confirm_payment' allbooks.book_id  %}" method="POST">
             {% csrf_token %}
             
             <div class="form-group">
@@ -53,7 +53,7 @@
             <!-- Proceed and Close buttons -->
             <div class="button-container">
                 <button type="submit" class="submit-btn">Proceed</button>
-                <button type="button" class="submit-btn" onclick="window.location.href='{% url 'log_books_details' allbooks.book_id %}';">Close</button>
+                <button type="button" class="submit-btn" onclick="window.location.href='{% url 'sub_books_details' allbooks.book_id %}';">Close</button>
             </div>
         </form>
     </div>

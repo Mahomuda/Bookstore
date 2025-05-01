@@ -61,7 +61,11 @@ class SignupForm(UserCreationForm):
 class ProfileUpdateForm(forms.ModelForm):
     class Meta:
            model = User
-           fields = ['username', 'email', 'address', 'contact_number']
+           fields = ['username', 'email', 'address', 'contact_number','u_image']
+class shop_ProfileUpdateForm(forms.ModelForm):
+    class Meta:
+           model = Shop
+           fields = ['username', 'shop_email','shop_name', 'address', 'contact_number']
 
 class Sub_LoginForm(forms.Form):
     username = forms.CharField(

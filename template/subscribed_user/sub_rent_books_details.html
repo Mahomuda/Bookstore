@@ -4,7 +4,7 @@
 {% load static %}
 
 {% block content %}
-<div class="container mt-5">
+<div class="container mt-3">
     <ul class="list-group">
         <li class="list-group-item">
             <div class="card" style="width: 10rem">
@@ -27,11 +27,32 @@
                 Out of Stock
             {% endif %}
         </li>
+        <!-- Reviews Section -->
+        <li class="list-group-item">
+            <strong>Reviews</strong>
+            <br>
+            {% if reviews %}
+                {% for review in reviews %}
+                    <div class="card mb-3">
+                        <div class="card-header">
+                            <strong>{{ review.user.username }}</strong>
+                            <span class="text-muted float-end">
+                                {{ review.created_at|date:"F d, Y" }}
+                            </span>
+                        </div>
+                        <div class="card-body">
+                            <p class="card-text">{{ review.comment }}</p>
+                        </div>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <p>No reviews yet.</p>
+            {% endif %}
+        </li>
     </ul>
-</div>
-<div class="container mt-1">
+    <div class="container mt-1">
     {% if allbooks.stock_quantity > 0 %}
-       <form action="{% url 'rent_info' allbooks.id %}" method="GET">
+       <form action="{% url 'rent_info' allbooks.book_id %}" method="GET">
             <button type="submit" class="btn btn-success" >rent</button>
        </form>
 
@@ -39,4 +60,32 @@
         <button class="btn btn-danger mt-4" disabled>Out of Stock</button>
     {% endif %}
 </div>
+    <!-- Review Form -->
+    <div class="mt-5">
+        {% if user.is_authenticated %}
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h5>Write a Review</h5>
+                </div>
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label class="form-label">Your Review</label>
+                            <textarea name="comment" class="form-control" rows="4" required></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Submit Review</button>
+                    </form>
+                </div>
+            </div>
+        {% else %}
+            <div class="alert alert-info">
+                <a href="{% url 'login' %}?next={{ request.path }}" class="alert-link">Login</a> to write a review.
+            </div>
+        {% endif %}
+    </div>
+
+</div>
+
+
 {% endblock %}

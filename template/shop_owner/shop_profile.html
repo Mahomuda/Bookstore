@@ -7,8 +7,13 @@
         <div class="card-body">
             <h5 class="card-title">User Information</h5>
             <br>
-            <p class="card-text"><strong>Username:</strong> {{ user.username }}</p>
+            <p class="card-text"><strong>Shop Owner:</strong> {{ user.username }}</p>
             <p class="card-text"><strong>Email:</strong> {{ user.email }}</p>
+            {% if user.contact_number %}
+            <p class="card-text"><strong>Shop name:</strong> {{ user.shop_name }}</p>
+            {% else %}
+            <p class="card-text"><strong>Shop name:</strong> Not provided</p>
+            {% endif %}
             {% if user.address %}
             <p class="card-text"><strong>Address:</strong> {{ user.address }}</p>
             {% else %}
@@ -21,7 +26,7 @@
             {% endif %}
         </div>
     </div>
-    <a href="{% url 'update_profile' %}" class="btn btn-danger mt-3">Update</a>
+    <a href="{% url 'shop_update_profile' %}" class="btn btn-danger mt-3">Update</a>
 </div>
 {% endblock %}
 

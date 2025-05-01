@@ -1,15 +1,16 @@
-from django.contrib.auth import authenticate, logout, login
-from django.http import HttpResponseRedirect
-from django.shortcuts import render, redirect, reverse, get_object_or_404
+from django.contrib.auth import authenticate,logout, login as auth_login
 from django.contrib.auth.decorators import login_required
 from .models import *
 from django.contrib import messages
-from .Books_Forms import BooksForm
-from .User_form import SignupForm, ProfileUpdateForm, LoginForm, Sub_LoginForm
+from .Books_Forms import BooksForm, ReviewForm
+from .User_form import SignupForm, ProfileUpdateForm, LoginForm, Sub_LoginForm, shop_ProfileUpdateForm
+from django.shortcuts import render, get_object_or_404, redirect
+from .models import Book, Order, Subscription
 
 
 def home(request):
     return render(request, template_name='bmHome/home.html')
+
 
 def books(request):
     genre_filter = request.GET.get('genre', None)
@@ -23,30 +24,64 @@ def books(request):
         'genre': genre_filter,
     }
     return render(request, template_name='bmHome/books.html', context=item)
-
 def books_details(request, book_id):
-    allbooks = Book.objects.get(pk=book_id)
+    book = get_object_or_404(Book, pk=book_id)
+    reviews = book.reviews.all().order_by('-created_at')
+
+    # Handle review submission (only for authenticated users)
+    if request.method == 'POST' and request.user.is_authenticated:
+        form = ReviewForm(request.POST)
+        if form.is_valid():
+            review = form.save(commit=False)
+            review.book = book
+            review.user = request.user
+            review.save()
+            messages.success(request, 'Your review has been submitted!')
+            return redirect('books_details', book_id=book_id)
+    else:
+        form = ReviewForm() if request.user.is_authenticated else None
+
     context = {
-        'allbooks': allbooks,
+        'book': book,
+        'reviews': reviews,
+        'form': form,
     }
-    return render(request, template_name='bmHome/books_details.html', context=context)
+    return render(request, 'bmHome/books_details.html', context)
+
+@login_required
+def submit_review(request, book_id):
+
+    book = get_object_or_404(Book, pk=book_id)
+    if request.method == 'POST':
+        form = ReviewForm(request.POST)
+        if form.is_valid():
+            review = form.save(commit=False)
+            review.book = book
+            review.user = request.user
+            review.save()
+            messages.success(request, 'Your review has been submitted!')
+    return redirect('books_details', book_id=book_id)
 
 def contacts(request):
     return render(request, template_name='bmHome/contacts.html')
 
-def subscription(request):
-    if request.method == 'POST':
-        return redirect(reverse('sub_base'))
-    return render(request, 'login_user/subscription.html')
 def signup(request):
     if request.method == 'POST':
         form = SignupForm(request.POST)
         if form.is_valid():
             user = form.save()
+            if user.user_type == 'shopowner':
+
+                Shop.objects.create(
+                    username=user,
+                    shop_email=user.email,
+                    shop_name=f"{user.username}'s Shop"
+                )
             return redirect('login')
     else:
         form = SignupForm()
     return render(request, 'bmHome/signup.html', {'form': form})
+
 
 def login(request):
     if request.method == 'POST':
@@ -56,13 +91,11 @@ def login(request):
             password = form.cleaned_data['password']
             user = authenticate(request, username=username, password=password)
             if user is not None:
-                login(request, user)
+                auth_login(request, user)
                 if user.user_type == 'normal':
-                    return redirect('login_user/log_profile')
+                    return redirect('log_profile')
                 elif user.user_type == 'shopowner':
                     return redirect('shop_profile')
-                elif user.user_type == 'rider':
-                    return redirect('rider_profile')
             else:
                 messages.error(request, "Invalid username or password")
     else:
@@ -70,9 +103,8 @@ def login(request):
 
     return render(request, 'bmHome/login.html', {'form': form})
 
-
-
 ####################################################################
+@login_required
 def subscription(request):
     if request.method == 'POST':
         form = Sub_LoginForm(request.POST)
@@ -132,44 +164,35 @@ def log_book(request):
         'genre': genre_filter,
     }
     return render(request, template_name='login_user/log_book.html', context=item)
+
+
 def log_books_details(request, book_id):
-    allbooks = Book.objects.get(id=book_id)
+    allbooks = get_object_or_404(Book, book_id =book_id)
+    reviews = Review.objects.filter(book=allbooks).order_by('-created_at')
+
+    # Handle review submission
+    if request.method == 'POST' and request.user.is_authenticated:
+        comment = request.POST.get('comment')
+        if comment:  # Basic validation
+            Review.objects.create(
+                book=allbooks,
+                user=request.user,
+                comment=comment,
+            )
+            messages.success(request, 'Your review has been submitted!')
+            return redirect('log_books_details', book_id=book_id)
+
     context = {
         'allbooks': allbooks,
+        'reviews': reviews
     }
-    return render(request, template_name='login_user/log_books_details.html', context=context)
+    return render(request, 'login_user/log_books_details.html', context)
+
+
+
 @login_required
-def purchase_book(request, book_id):
-    user = request.user
-
-    if hasattr(user, 'profile'):
-        user_profile = user.profile
-    else:
-        user_profile = None
-
-    book = get_object_or_404(Book, pk=book_id)
-
-    if book.stock_quantity > 0:
-
-        order = Order.objects.create(
-            user_id=request.user,
-            book_name=book,
-            amount=book.price,
-            status='buy',
-            phone=request.user.profile.phone
-        )
-
-        book.stock_quantity -= 1
-        book.save()
-
-        return render(request, 'purchase_success.html', {'order': order})
-    else:
-        return render(request, 'purchase_failed.html', {'message': 'Out of stock'})
-def confirm_payment(request, book_id):
-    book = get_object_or_404(Book, id=book_id)
-    return render(request, 'login_user/confirm_payment.html',{'book': book})
 def process_payment_for_book(request, book_id):
-    book = get_object_or_404(Book, id=book_id)
+    allbooks = get_object_or_404(Book, book_id = book_id)
 
     if request.method == 'POST':
         phone = request.POST.get('phone')
@@ -177,19 +200,30 @@ def process_payment_for_book(request, book_id):
         amount = request.POST.get('amount')
 
         if phone and transaction_id and amount:
-
-            book.is_sold = True
-            book.save()
-            messages.success(request, f"Payment successful for {book.book_name}. Transaction ID: {transaction_id}.")
-            return redirect('payment_confirmation', book_id=book.id)
+            # Create order record for purchase
+            Order.objects.create(
+                username =request.user,
+                book_name = allbooks,
+                status='buy',
+                payment_status=True
+            )
+            allbooks.stock_quantity -= 1
+            allbooks.is_sold = True
+            allbooks.save()
+            messages.success(request, f"Payment successful for {allbooks.book_name}. Transaction ID: {transaction_id}.")
+            return redirect('payment_confirmation', book_id=allbooks.book_id)
         else:
             messages.error(request, "Please provide all the required details.")
-            return redirect('process_payment', book_id=book.id)
+            return redirect('payment_confirmation', book_id=allbooks.book_id)
 
-    return render(request, 'login_user/process_payment_for_book.html', {'book': book})
+    return render(request, 'login_user/process_payment_for_book.html', {'allbooks': allbooks})
+
+
+@login_required
 def payment_confirmation(request, book_id):
-    book = Book.objects.get(id=book_id)
-    return render(request, 'login_user/payment_confirmation.html', {'book': book})
+    allbooks = get_object_or_404(Book, book_id=book_id)
+    return render(request, 'login_user/payment_confirmation.html', {'allbooks': allbooks})
+
 def log_help(request):
     return render(request, template_name='login_user/log_help.html')
 
@@ -199,7 +233,7 @@ def log_profile(request):
 @login_required
 def update_profile(request):
     if request.method == 'POST':
-        form = ProfileUpdateForm(request.POST, instance=request.user)
+        form = ProfileUpdateForm(request.POST,request.FILES, instance=request.user)
         if form.is_valid():
             form.save()
             return redirect('log_profile')
@@ -221,7 +255,7 @@ def update_sub_profile(request):
         form = ProfileUpdateForm(request.POST, instance=request.user)
         if form.is_valid():
             form.save()
-            return redirect('log_profile')
+            return redirect('sub_profile')
     else:
         form = ProfileUpdateForm(instance=request.user)
     return render(request, 'subscribed_user/sub_profile_form.html', {'form': form})
@@ -246,31 +280,112 @@ def sub_rent_books(request):
     return render(request, 'subscribed_user/sub_rent_books.html', context= item)
 
 def sub_books_details(request,book_id):
-    allbooks = Book.objects.get(pk=book_id)
+    allbooks = get_object_or_404(Book, book_id=book_id)
+    reviews = Review.objects.filter(book=allbooks).order_by('-created_at')
+
+    # Handle review submission
+    if request.method == 'POST' and request.user.is_authenticated:
+        comment = request.POST.get('comment')
+        if comment:  # Basic validation
+            Review.objects.create(
+                book=allbooks,
+                user=request.user,
+                comment=comment,
+            )
+            messages.success(request, 'Your review has been submitted!')
+            return redirect('sub_books_details', book_id=allbooks.book_id)
+
     item = {
         'allbooks': allbooks,
+        'reviews': reviews
     }
     return render(request, template_name='subscribed_user/sub_books_details.html',context= item)
+
+def confirm_payment(request, book_id):
+    allbooks = get_object_or_404(Book, book_id = book_id)
+
+    if request.method == 'POST':
+        phone = request.POST.get('phone')
+        transaction_id = request.POST.get('transaction_id')
+        amount = request.POST.get('amount')
+
+        if phone and transaction_id and amount:
+            # Create order record for purchase
+            Order.objects.create(
+                username =request.user,
+                book_name = allbooks,
+                status='buy',
+                payment_status=True
+            )
+            allbooks.stock_quantity -= 1
+            allbooks.is_sold = True
+            allbooks.save()
+            messages.success(request, f"Payment successful for {allbooks.book_name}. Transaction ID: {transaction_id}.")
+            return redirect('confirm_payment', book_id=allbooks.book_id)
+        else:
+            messages.error(request, "Please provide all the required details.")
+            return redirect('confirm_payment', book_id=allbooks.book_id)
+
+    return render(request, 'subscribed_user/confirm_payment.html', {'allbooks': allbooks})
+
 def sub_rent_books_details(request,book_id):
-    allbooks = Book.objects.get(pk=book_id)
+    allbooks = get_object_or_404(Book, book_id=book_id)
+    reviews = Review.objects.filter(book=allbooks).order_by('-created_at')
+
+    # Handle review submission
+    if request.method == 'POST' and request.user.is_authenticated:
+        comment = request.POST.get('comment')
+        if comment:  # Basic validation
+            Review.objects.create(
+                book=allbooks,
+                user=request.user,
+                comment=comment,
+            )
+            messages.success(request, 'Your review has been submitted!')
+            return redirect('sub_rent_books_details', book_id=allbooks.book_id)
+
     item = {
         'allbooks': allbooks,
+        'reviews': reviews
     }
     return render(request, template_name='subscribed_user/sub_rent_books_details.html',context= item)
 
 
+@login_required
 def rent_info(request, book_id):
-    book = Book.objects.get(id=book_id)
+    allbooks = get_object_or_404(Book, book_id=book_id)
     if request.method == "POST":
         email = request.POST.get('email')
         address = request.POST.get('address')
         duration = request.POST.get('duration')
-    return render(request, 'subscribed_user/rent_info.html', {'book': book})
+        if email and address and duration:
+            # Create order record for purchase
+            Order.objects.create(
+                username =request.user,
+                book_name = allbooks,
+                status='rent',
+                payment_status=True
+            )
+            allbooks.stock_quantity -= 1
+            allbooks.is_rented = True
+            allbooks.save()
+
+            messages.success(request, "Book rental confirmed!")
+            return redirect('rent_confirmation', book_id=allbooks.book_id)
+        else:
+            messages.error(request, "Please provide all the required details.")
+            return redirect('confirm_payment', book_id=allbooks.book_id)
+
+    return render(request, 'subscribed_user/rent_info.html', {'allbooks': allbooks})
 
 
+@login_required
 def rent_confirmation(request, book_id):
-    book = Book.objects.get(id=book_id)
-    return render(request, 'subscribed_user/rent_confirmation.html', {'book': book})
+    allbooks = get_object_or_404(Book, book_id=book_id)
+    return render(request, 'subscribed_user/rent_confirmation.html', {'allbooks': allbooks})
+
+
+###########################################################################################################################
 def shop_base(request):
     return render(request, template_name='shop_owner/shop_base.html')
 
@@ -297,25 +412,26 @@ def shop_help(request):
 def shop_profile(request):
     return render(request, 'shop_owner/shop_profile.html', {'user': request.user})
 
+@login_required
 def shop_update_profile(request):
     if request.method == 'POST':
-        form = ProfileUpdateForm(request.POST, instance=request.user)
+        form = shop_ProfileUpdateForm(request.POST,request.FILES, instance=request.user)
         if form.is_valid():
             form.save()
-            return redirect('log_profile')
+
+            return redirect('shop_profile')
     else:
-        form = ProfileUpdateForm(instance=request.user)
+        form = shop_ProfileUpdateForm(instance=request.user)
     return render(request, 'shop_owner/shop_profile_form.html', {'form': form})
 
-def shop_payment(request):
-    return render(request, template_name='shop_owner/shop_payment.html')
 
-def shop_book_details(request,book_id):
-    allbooks = Book.objects.get(pk = book_id)
+def shop_book_details(request, book_id):
+    allbooks = get_object_or_404(Book, book_id=book_id)
     item = {
-        'allbooks':allbooks,
+        'allbooks': allbooks,
     }
-    return render(request,template_name = 'shop_owner/shop_book_details.html',context = item)
+    return render(request, template_name='shop_owner/shop_book_details.html', context=item)
+
 
 def upload_books(request):
     form = BooksForm()
@@ -323,57 +439,32 @@ def upload_books(request):
         form = BooksForm(request.POST, request.FILES)
         if form.is_valid():
             form.save()
+            return redirect('shop_books')
     context = {'form': form}
     return render(request, template_name='shop_owner/books_form.html', context=context)
 
 def update_books(request, book_id):
     allbooks = Book.objects.get(pk=book_id)
-    form = BooksForm (instance=allbooks)
     if request.method == 'POST':
-        form = BooksForm(request.POST, request.FILES, instance=books)
+        form = BooksForm(request.POST, request.FILES, instance=allbooks)
         if form.is_valid():
             form.save()
             return redirect('shop_books')
+    else:
+        form = BooksForm(instance=allbooks)
     context = {'form': form}
-    return render(request, template_name='shop_owner/books_form.html',context=context)
+    return render(request, template_name='shop_owner/books_form.html', context=context)
 
-def delete_books(request,book_id):
-   allbooks = Book.objects.get(pk=book_id)
-   if request.method == 'POST':
-       allbooks.delete()
-       return redirect('home')
-   return render(request, template_name = 'shop_owner\delete_books.html')
-   return redirect('payment')
+def delete_books(request, book_id):
+    allbooks = get_object_or_404(Book, book_id=book_id)
+    if request.method == 'POST':
+        allbooks.delete()
+        messages.success(request, f"'{allbooks.book_name}' has been deleted successfully.")
+        return redirect('shop_books')
+    return render(request, 'shop_owner/delete_books.html', {'allbooks': allbooks})
+
 def view_sub_profile(request, user_id):
     sub_profile = get_object_or_404(SubProfile, user_id=user_id)
     return render(request, 'sub_profile.html', {'sub_profile': sub_profile})
-
-
-#####################################################################################################
-def rider_base(request):
-    return render(request, template_name='Rider/rider_base.html')
-
-def rider_navbar(request):
-    return render(request, template_name='Rider/rider_navbar.html')
-@login_required
-def rider_profile(request):
-    return render(request, 'Rider/rider_profile.html', {'user': request.user})
-@login_required
-def rider_update_profile(request):
-    if request.method == 'POST':
-        form = ProfileUpdateForm(request.POST, instance=request.user)
-        if form.is_valid():
-            form.save()
-            return redirect('rider_profile')
-    else:
-        form = ProfileUpdateForm(instance=request.user)
-    return render(request, 'Rider/profile_form.html', {'form': form})
-
-
-def logout_view(request):
-    logout(request)
-    return redirect('login')
-
-
 
 
